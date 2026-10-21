@@ -1,0 +1,259 @@
+# MJN 3.1 — progetto PERSONALE, non una release
+
+> **ATTENZIONE: questo e' un progetto per uso personale.**
+> E' un **mashup di funzioni di varie mod che mi piacciono**, messo insieme per il *mio* gioco e il *mio* elenco di mod.
+> **Non e' una mod rilasciata per tutti**: non e' pensato per essere scaricato, installato o usato da altre persone,
+> non offro supporto e non accetto richieste.
+> Il repository e' pubblico **solo** perche' un repository privato mi ha limitato l'uso di GitHub Actions per compilare.
+
+## Che cos'e' (e che cosa NON e')
+
+- E' un plugin SKSE **senza Papyrus**, scritto per me, che raccoglie in un unico posto alcune funzioni di movimento
+  e di combattimento in aria che mi piacciono, prese da varie mod che uso e riscritte a modo mio. **Mashup per uso personale.**
+- **Non e' una release pubblica.** Non c'e' una pagina della mod, non ci sono versioni da scaricare, non c'e' un pacchetto pronto.
+- Le idee, le animazioni, gli effetti e i suoni da cui parte questo mashup sono **del lavoro dei rispettivi autori** e
+  **non sono in questo repository** (qui ci sono solo il codice del plugin e il file per compilarlo).
+- Se stai leggendo questo file e non sei io: questo repository e' un archivio di lavoro personale, non un prodotto.
+  **Non e' pensato per altri.**
+
+## Cosa c'e' in questo repository
+
+| File | Cosa e' |
+|---|---|
+| `src/` | il codice sorgente del plugin (C++), per uso personale |
+| `xmake.lua` | il file di compilazione |
+| `.github/workflows/build.yml` | il workflow che compila il plugin su GitHub Actions (build personale) |
+| `README.md` | queste note, per me |
+
+Non contiene animazioni, mesh, texture, suoni, plugin `.esp` o altri dati di gioco: quelli stanno solo sul mio computer.
+
+## Cosa fa la versione 3.1 (sempre: per il mio uso)
+
+La 1.0 e' la base di movimento (gia' provata da me). La 2.x aggiunge:
+
+1. **Strega volante** (modalita' di levitazione con le magie)
+   - In aria, con le magie in mano, il tasto di lancio in salto ti lascia **sospeso nel punto in cui sei** (niente discesa graduale).
+   - All'attivazione le magie che hai in mano **escono da sole** (animazione di equip): la richiesta parte appena il personaggio
+     esce dalla posa di salto / caduta e viene ripetuta (ogni 0,7 s, al massimo 6 volte) finche' le mani non sono fuori. All'uscita
+     parte l'animazione di unequip; durante la modalita' le animazioni di lancio cambiano in base al tipo di magia
+     (lancio singolo, doppio, concentrazione, ecc.).
+   - Ci si muove **lentamente in tutte le direzioni** mentre si lanciano magie (velocita' regolabile dal menu).
+   - Non funzionano salto, dash, slam, super salto, attacchi in aria: solo il lancio delle magie e il comando di uscita.
+   - **Tutto il resto e' bloccato** (2.7). Tre livelli, ognuno si spegne dal menu ("Blocca tutto tranne lancio e uscita", "Blocca la posa
+     di bacino e gambe"):
+     1. i tasti di salto, sprint, furtivita' e urlo non arrivano al gestore dei comandi del gioco;
+     2. gli eventi di animazione mandati al grafo del giocatore (anche da altre mod: schivata, scatto, salto, sprint, furtivita', urlo,
+        parata) vengono fermati prima di arrivare al personaggio. Il log, a fine modalita', scrive quali eventi sono passati e quali no
+        (righe `filtro eventi`), cosi' si vede se una schivata usa un nome che il filtro non conosce;
+     3. **blocco della posa** (reso continuo nella 2.8): a ogni fotogramma misuro di quanto il bacino del grafo e' sceso rispetto alla
+        posa sospesa memorizzata (dalle sole trasformazioni locali delle ossa, senza aggiornare lo scheletro) e mescolo la posa del grafo con
+        quella memorizzata con un peso che sale piano (curva dolce, da 1 a 6 unita' di discesa) e scende in 0,15 s. Dal log: a ogni inizio
+        di lancio la testa passava da +172 a +137 e il bacino da +119 a +83. Braccia e busto dei lanci non vengono toccati. La 2.7 riscriveva
+        le ossa di colpo e aggiornava lo scheletro tre volte a fotogramma: micro scatti e fisica dei vestiti sballata. Ora lo scheletro si
+        aggiorna una volta sola e solo quando c'e' qualcosa da correggere; durante l'equip il blocco non agisce. Le righe `blocco posa:
+        INIZIO / FINE` del log dicono quando e di quanto e' intervenuto.
+   - Il comando di uscita e' configurabile (tastiera: anche **due tasti insieme**; controller: anche combinazioni).
+   - Quando esco, il personaggio **comincia a cadere solo quando finisce l'animazione di unequip**; in quel momento riparte
+     l'animazione di caduta e il personaggio riceve una piccola spinta verso il basso (non resta "appoggiato" all'aria).
+   - Mentre e' sospeso resta **fermo nella posa delle magie**, senza animazioni di camminata, e si sposta fluttuando: **il gioco non
+     riceve nessun movimento**. Stick e tasti di movimento vengono fermati nel gestore dei comandi del gioco, prima che diventino
+     movimento; lo stick lo leggo io (XInput) e ti muovo io con la velocita' del controller. Le animazioni di lancio che hanno
+     movimento delle gambe si vedono normalmente.
+   - Poi **fluttua leggermente su e giu'** (spostamento del modello, non un'animazione).
+   - **Sempre rivolto come la telecamera** (2.5): nel log del 20/10 la posa si abbassava "come a terra" ogni volta che partiva
+     l'animazione di rotazione sul posto (TurnDelta +-45 e iSyncTurnState 2). Ora il personaggio viene tenuto rivolto come la telecamera
+     (senza muoverla), la variabile di rotazione del grafo viene azzerata e il gestore dei comandi riceve lo stick a zero, cosi' niente
+     lo gira verso lo stick. La direzione dello stick e' rispetto alla camera. Ogni volta che la posa scende comunque, il log scrive una
+     riga `posa bassa` con lo stato del grafo; dalla 2.6 il log scrive anche gli eventi di animazione che arrivano mentre sei sospeso
+     (righe `evento di animazione`, escluse quelle dei passi e dei suoni), per vedere quale evento precede ogni abbassamento.
+   - **Atterraggio in aria nascosto** (2.9): per uscire dalla posa di caduta il plugin manda al grafo l'evento di atterraggio del gioco
+     (`JumpLand`); il grafo rimane nello stato di salto per circa 0,8 s e in quel tempo mostra un'animazione di atterraggio fatta in aria
+     (nel log: testa da +95 a +131, bacino a +81..83, contro +175 / +120 della posa sospesa). Dalla 2.9 in quel periodo **bacino, gambe e
+     busto** (Root, COM, Pelvis, cosce, polpacci, piedi, dita, Spine, Spine1, Spine2) vengono tenuti nella **posa sospesa memorizzata**:
+     il peso sale in 0,12 s e, quando il grafo e' uscito dal salto e il suo bacino e' tornato in alto, scende in 0,18 s. Le braccia non si
+     toccano (restano le animazioni di equip / unequip). La posa si memorizza una volta per attivazione, a modalita' attiva, quando il
+     bacino e' fermo da 0,1 s, il grafo non e' in salto e non c'e' stato un lancio nei 0,8 s precedenti; si salva in
+     `Data/SKSE/Plugins/MagicalJumpingNative.pose` (testo semplice) e si ricarica all'avvio, quindi dalla seconda attivazione in poi
+     l'atterraggio non si vede piu'. **La primissima attivazione in assoluto lo mostra ancora**, perche' la posa non esiste. Il file
+     porta con se' razza e sesso del personaggio (3.0): se cambiano viene scartato. (Nella 2.9 il confronto era sulle lunghezze delle ossa e
+     scartava la posa a ogni attivazione: l'atterraggio nascosto non e' mai partito. Un file della 2.9 viene accettato e riscritto.) Nel menu: opzione "Nascondi l'atterraggio in aria
+     all'attivazione" (`HideLanding` nell'ini) e pulsante "Dimentica la posa sospesa memorizzata". Lo stesso modello a posa memorizzata
+     serve anche al blocco della posa di bacino e gambe (non c'e' piu' una posa che cambia di continuo).
+   - **Equip** (2.8, rivisto nella 2.9 e nella 3.0): se le mani magiche sono gia' fuori all'attivazione si vede comunque l'animazione di equip
+     (opzione "Mostra l'equip anche a mani gia' fuori", `ReEquipHands` nell'ini, accesa di default). La 2.9 rinfoderava e rimetteva fuori, ma dal
+     log del 21/10: la richiesta di mani fuori partiva proprio mentre finiva l'animazione di unequip, il gioco restava 3,0 s nello stato
+     "mani in uscita" senza animazione (da 1,59 s a 4,61 s) e le mani sparivano per troppo tempo. **Dalla 3.0** il plugin manda direttamente
+     l'evento di equip delle magie (`MagicForceEquip`) appena il grafo e' uscito dal salto / caduta, e aspetta che il grafo mostri l'equip (eventi con
+     "Equip" nel nome, per esempio `Magic_Equip_Out`). Se non succede nulla entro 1 s ritenta con `Magic_Equip`; se anche questo non serve ripiega
+     su rinfodera + riequipaggia, ma stavolta la richiesta di mani fuori aspetta la fine dell'unequip (`Magic_Unequip_Out`). Con le mani riposte
+     all'attivazione resta come prima (mani fuori appena il grafo esce dal salto: dal log il gioco risponde subito e l'equip dura circa 0,5 s).
+     Le righe da guardare nel log: `equip diretto: evento ...`, `equip diretto: animazione di equip vista dal grafo dopo ...` o
+     `ripiego su rinfodera + riequipaggia`.
+   - **Uscita e caduta** (3.0): dal log del 21/10 la mod di planata (`StartPara`) partiva da sola appena finiva l'uscita, il personaggio galleggiava
+     invece di cadere e, atterrato, il grafo restava nello stato di salto (`bInJumpState 1`, Speed 132) e il personaggio scivolava a terra finche'
+     non ci si fermava e ci si muoveva di nuovo. Ora, dopo l'uscita in aria (opzione "Dopo l'uscita cadi con la gravita' normale",
+     `NoGlideAfterExit` nell'ini, accesa): l'evento `StartPara` mandato dalla mod di planata viene fermato nel filtro degli eventi fino
+     all'atterraggio (al massimo 25 s), cosi' si cade con la gravita' di Skyrim (piu' la piccola spinta verso il basso); se atterrato il grafo
+     e' ancora in salto per piu' di 1 s mando `JumpLand`, poi `JumpLandEnd`, poi `JumpLandFailSafe` (uno ogni 0,6 s). Il log scrive
+     `dopo l'uscita: planata bloccata`, `atterrato dopo ...`, gli eventi di atterraggio mandati e il riepilogo (quanti `StartPara` sono stati fermati;
+     se la planata parte lo stesso lo dice).
+   - **Ammorbidimento di busto e braccia** (3.0, `SmoothUpperBody` nell'ini, acceso): se il grafo cambia di colpo la rotazione di Spine, clavicole,
+     braccia, avambracci o mani (oltre circa 570 gradi/s in un fotogramma, almeno 6 gradi) il plugin tiene lo scarto rispetto a quello che si vedeva
+     prima e lo fa decadere in 0,22 s (curva dolce), cosi' il cambio si distribuisce su qualche fotogramma invece di uno. E' un tentativo per la
+     fisica delle maniche ancora sballata quando si caricano le magie (video del 21/10, 0:39). Non e' confermato che quella sia la causa:
+     il log scrive ogni passo brusco trovato (`ammorbidimento: passo brusco di ... gradi su ...`) e il riepilogo a fine modalita'.
+     Se le maniche sono ancora strane, provare a spegnere "Blocca la posa di bacino e gambe" e/o questa opzione, e mandarmi il log.
+   - **Dual casting**: quando lanci con due mani la posa a volte scendeva verso quella da terra. Le sostitute in piu' per il doppio lancio
+     (nomi ipotetici di animazioni) dalla 2.7 stanno direttamente nella cartella `Witch Mode` dei dati (prima erano in una cartella di
+     prova a parte, che si attivava da sola con OAR). La causa vera, dal log, e' pero' un'altra: vedi il blocco della posa qui sopra.
+   - **Durata massima** regolabile dal menu: da 30 secondi a illimitata (10 secondi prima della fine compare un avviso).
+   - Per tutta la durata si accendono gli effetti visivi (corpo e mani), che si spengono quando esco.
+   - Sostituisce, **solo per le magie**, l'attacco in aria con le magie della 1.0. Il resto resta invariato.
+2. **Attacchi pesanti in salto con armi a due mani**: dalla 3.1 le fiamme partono solo da una certa altezza (slider "Altezza minima delle fiamme", `FlameHeight` nell'ini sotto `[HeavyAttack]`, 200 di default, 0 = sempre): l'altezza e' quella sopra il punto di partenza del salto
+   misurata quando parte l'attacco; sotto e' un attacco pesante normale (senza scia, burst ed esplosione a terra), sopra e' come prima. Il log scrive `fiamme: altezza ... contro minimo ...`.
+   All'impatto parte una **piccola esplosione di fuoco**, la stessa della
+   Tempesta di Fuoco dello slam a terra ma con area e danno molto ridotti (regolabili), **senza attesa** tra una e l'altra.
+   L'animazione degli effetti del burst e' **1,5 volte piu' veloce** (slider nel menu, da 1 a 3; la dimensione non cambia). Dalla 2.7 la
+   velocita' si applica su piu' livelli (sequenze e controller di animazione del modello, particelle avanzate a ogni frame, anche gli
+   effetti che il gioco crea come "pericolo" e non come esplosione); la 2.6 agiva solo sui controller e nel gioco la velocita' non e' cambiata.
+3. **Altezza minima per gli attacchi pesanti in aria**: funzionano solo piu' in alto di un salto normale
+   (circa l'altezza del secondo salto, regolabile). Troppo in basso, non partono.
+4. **Bagliore rosso** (al posto del blu) nell'effetto di protezione dalla caduta da grande altezza.
+5. **Effetti solo visivi** (nessun danno, nessuno script; ognuno si accende o spegne dal menu, pagina degli effetti):
+   - **super salto**: la **scia di fuoco** dura finche' non atterri (si spegne anche quando parte la planata) e, solo per due secondi
+     dal salto, le **rune** intorno al personaggio della strega volante; se il salto parte da terra c'e' anche una **piccola
+     esplosione** sotto i piedi (modello e suono dell'esplosione del gioco, nessun danno, nessuna spinta; dimensione regolabile,
+     predefinito 0,45 dell'esplosione intera). Dalla 2.7 l'esplosione la **piazza il plugin** (`PlaceObjectAtMe`, come l'anello dello
+     slam): nel log 2.6 si leggeva "esplosioni nuove trovate 0", cioe' l'esplosione agganciata all'effetto magico non veniva mai creata.
+     Mentre e' pronto c'e' soltanto il bagliore rosso della protezione dalla caduta, senza particelle blu;
+   - **aspetto della scia** (2.7): il "turbine" di fiamme intorno al corpo era l'arte d'impatto della scia. Di default ora c'e' solo lo
+     shader di fuoco sul corpo; nel menu (pagina degli effetti) ci sono tre scelte, cosi' si prova senza ricompilare: solo fiamme sul
+     corpo (predefinita), fiamme + arte come nella 2.6, solo arte;
+   - **attacco pesante in salto**: solo la scia di fuoco dall'inizio all'atterraggio e l'esplosione solo visiva a terra;
+   - **protezione dalla caduta** (2.6): il **bagliore rosso** (che nel gioco era blu) e, insieme a lui e con le sue stesse condizioni,
+     le **rune** intorno al personaggio per due secondi. Niente fiamme.
+   Usano forme di Skyrim (shader, arte d'impatto, modello e suono dell'esplosione) copiate nei miei dati di gioco, con danno e forza a zero.
+6. **Slam con arma sfoderata** (2.7): se all'inizio dello slam hai un'arma in mano, all'atterraggio parte `mt_jumpland` dell'arma
+   (quella delle cartelle degli attacchi pesanti in salto: una mano, mano sinistra, due mani, due armi, pugni); senza arma sfoderata
+   resta l'atterraggio di prima. Lo stato lo segna il plugin nella variabile `MJN_SlamArmed` (nei dati) e lo leggono le cartelle OAR
+   `Slam Armed - ...`. Con arco, bastone o magie in mano non cambia niente.
+
+Il resto (salto regolabile, doppio/triplo salto, super salto, dash in aria, slam a terra, cambio direzione in aria,
+attacchi in salto normali/potenti/con l'arco, correzioni di sicurezza, reset delle animazioni) e' quello della 1.0.
+
+Tutto si imposta dal menu **F1 -> MJN** (richiede SKSE Menu Framework). Le impostazioni sono salvate in
+`Data/SKSE/Plugins/MagicalJumpingNative.ini` (ogni voce e' commentata nel file). Il log e' in
+`Documents/My Games/Skyrim Special Edition/SKSE/MagicalJumpingNative.log`.
+
+## Tasti predefiniti (tutti cambiabili dal menu)
+
+| Azione | Tastiera | Controller | Modo |
+|---|---|---|---|
+| Super salto | freccia Su | D-pad Sinistra | tieni premuto (1,5 s), poi salta |
+| Dash in aria | freccia Destra | D-pad Destra | pressione singola, solo in aria |
+| Slam | freccia Giu' | LB + D-pad Destra | tieni premuto in aria (0,25 s) |
+| Uscita dalla strega volante | freccia Sinistra (+ un secondo tasto opzionale) | LB + D-pad Sinistra | pressione singola |
+| Reset animazioni | nessuno | LB + RB + Back | tieni premuto (0,6 s) |
+| Attacco in aria: normale / potente / magia | tasto del gioco | RT / LT + RT / LT | come gli attacchi a terra |
+
+I pulsanti del controller si leggono direttamente da XInput; nel menu "Cambia" ti fa premere il pulsante o la combinazione.
+
+## Strega volante: note di funzionamento
+
+- Parte dal comando di lancio in salto (o dall'attacco normale, con l'opzione "Scelta automatica con l'attacco normale") quando in mano hai
+  **solo magie** (con l'arco parte la freccia, con le armi parte l'attacco in aria).
+- Richiede gli attacchi in aria attivi nel menu e i dati di gioco della 2.0 (che non sono in questo repository).
+- Se le mani magiche sono gia' fuori all'attivazione, vengono rinfoderate e rimesse per mostrare l'animazione di equip
+  (opzione "Mostra l'equip anche a mani gia' fuori"); costa circa 2,5 secondi in piu' (la richiesta parte appena il grafo esce dal salto).
+- Se le mani sono riposte, escono da sole appena il grafo di animazione lascia lo stato di salto (circa 1 secondo, poi l'animazione
+  di equip). Se dopo 6 secondi non sono uscite la modalita' parte lo stesso (riga `mani non uscite` nel log).
+- Rinfoderare le magie col comando del gioco fa uscire dalla modalita' (opzione).
+- Il movimento e' solo orizzontale (8 direzioni); la quota la tiene il plugin (quota di attivazione + fluttuazione).
+- Tre opzioni nel menu controllano come si vede il personaggio: "Il gioco non riceve movimento" (mentre sei sospeso stick e tasti di
+  movimento vengono fermati nel gestore dei comandi, e il vettore di movimento del giocatore resta a zero; in piu', durante
+  l'aggiornamento delle animazioni vengono azzerati velocita' del controller e variabili di velocita': niente camminata;
+  appena la modalita' finisce lo stick di adesso viene rimesso), "Via la posa di caduta all'attivazione" (eventi di atterraggio del gioco, uno alla
+  volta, `JumpLand` per primo, senza toccare la posa delle mani) e "Posa di caduta quando esci".
+- Il salto premuto mentre sei sospeso non conta come salto di questo volo.
+- Il log (`strega volante: ...`) scrive i primi tre episodi in dettaglio: quota, velocita' lette e scritte, stato del controller e
+  del grafo di animazione, altezze di testa / bacino / telecamera rispetto al punto del personaggio, richieste di "mani fuori" e,
+  quando ti muovi, una riga `movimento:` con lo stick vero, quanti eventi sono stati fermati e le variabili del grafo (Speed, Direction, bInMoveState, ...);
+  dopo l'uscita scrive anche cosa succede per due secondi.
+
+## Compilare (GitHub Actions)
+
+Il plugin si compila solo su GitHub Actions (non ho una toolchain locale):
+
+1. Carica il contenuto di questa cartella in un repository (compresa `.github/workflows/build.yml`).
+2. Il workflow parte con il push (o da *Actions -> Build -> Run workflow*). Una build richiede circa 30 minuti la prima volta.
+3. A fine build scarica l'artifact `MJN-3.1-uso-personale`: contiene `SKSE/Plugins/MagicalJumpingNative.dll` (+ `.pdb`).
+
+Base: CommonLibSSE-NG (fork con supporto VR, commit fissato nel workflow), compilato per Skyrim SE 1.5.97 e AE.
+
+## Installazione (per me, in MO2)
+
+1. Mod "dati" (privata, non nel repository): contiene le animazioni OAR, gli effetti, i suoni e il plugin `doublejump.esp` (ESL).
+2. Mod "DLL": l'artifact scaricato da GitHub.
+3. Dipendenze: SKSE, Address Library, OAR, SKSE Menu Framework.
+4. Se arrivo da una versione con script Papyrus: menu F1 -> "Disattiva vecchi script", salva, esci e togli i vecchi file.
+
+## Limiti noti / da verificare in gioco (3.0 e 3.1)
+
+- **Niente della 3.0 e' stato provato in gioco** (compilo su GitHub Actions e controllo solo la sintassi). In particolare: l'atterraggio nascosto
+  (nella 2.9 non e' mai partito per il difetto sopra, quindi la 3.0 lo esegue davvero per la prima volta), l'equip diretto (se `MagicForceEquip`
+  non fa partire l'animazione scatta il ripiego), il blocco di `StartPara` (se la mod di planata limita la velocita' di caduta anche per
+  un'altra via, la riga di riepilogo dice `la planata e' partita lo stesso`) e l'ammorbidimento (soglia e durata sono ipotesi).
+
+- **L'atterraggio nascosto della 2.9 non e' stato provato in gioco** (compilo su GitHub Actions e controllo solo la sintassi). Si basa
+  sul fatto che il grafo scrive le trasformazioni locali di tutte le ossa a ogni fotogramma, prima del punto in cui le sostituisco (dal
+  log della 2.6 la posa dell'atterraggio e' una posa delle ossa, non del controller). Le righe da guardare nel log: `posa sospesa:
+  memorizzata / caricata dal file / salvata`, `atterraggio nascosto: INIZIO / FINE` (con il bacino piu' basso del grafo durante
+  l'atterraggio) e quella di fine modalita'. Se `posa sospesa` resta `ASSENTE` la misura di "posa buona" non scatta (guarda i numeri di
+  testa e bacino). Se la posa memorizzata ha un busto strano, il pulsante del menu la cancella.
+- **La correzione continua della 2.8 non e' stata provata in gioco** (la compilazione la fa GitHub Actions e io controllo solo la sintassi).
+  La 2.7 invece e' stata provata: il blocco della posa funzionava ma dava micro scatti e disturbava la fisica dei vestiti. Parte dall'ipotesi
+  che il grafo riscriva le ossa del bacino a ogni fotogramma prima del punto in cui le rileggo; il log conta le volte in cui non e' cosi'
+  (`volte che il grafo non ha riscritto il bacino`). Se la fisica dei vestiti resta sballata, il blocco si spegne dal menu e il problema e'
+  da cercare altrove (movimento del modello, rotazione verso la camera).
+- Il log va copiato a gioco chiuso: durante la partita il file contiene solo le prime righe (il log della 2.7 aveva solo l'avvio).
+- Il filtro degli eventi riconosce le schivate dal nome (`dodge`, `sidestep`, `evade`, `tkdr`). Se una mod usa un altro nome, la riga
+  `filtro eventi` a fine modalita' lo mostra tra gli eventi "passati" e si aggiunge.
+- Aggancio nuovo: l'interfaccia di animazione del giocatore (spostamento 0x38 nell'oggetto, verificato dall'informazione RTTI) e i
+  gestori di salto / sprint / furtivita' / urlo. Se uno non si aggancia, il log lo scrive all'avvio (`hook ... NON installato`).
+
+- **Strega volante**: il lancio nativo a mezz'aria e l'estrazione delle mani magiche via codice non sono confermati su tutte le
+  versioni del gioco; l'uscita comincia con l'animazione di unequip e la caduta riparte solo alla fine (tempo massimo di sicurezza: 3 s).
+- Gli effetti della strega volante si spengono **all'inizio** dell'uscita, non alla fine dell'animazione di unequip.
+- L'effetto di impatto del bagliore rosso usa anche un effetto del gioco che potrebbe restare blu: c'e' l'opzione
+  "Togli anche le scintille del gioco".
+- L'esplosione di fuoco copia gli effetti della Tempesta di Fuoco del gioco: l'area e il danno si riducono, ma la grandezza del solo effetto
+  visivo potrebbe non seguire l'area. Da verificare a occhio.
+- **Esplosioni** (2.6): la velocita' del burst e la dimensione dell'esplosione del super salto si ottengono agendo sul modello 3D
+  dell'esplosione appena creata dal gioco (frequenza dei controller di animazione, scala del nodo radice). Non l'ho potuto provare: se
+  il gioco non la mostra in quel punto, o le particelle ignorano la scala, non cambia niente. Le righe `esplosione (...)` del log dicono
+  cosa e' stato trovato e toccato; il super salto ha un cursore per la dimensione, il burst uno per la velocita'.
+- **Rotazione** (2.5): tenere il personaggio rivolto come la camera e' un tentativo basato sul log (la rotazione sul posto coincideva
+  con la posa bassa); se la posa scende ancora, le righe `posa bassa` e `faccia ... camera ...` del log dicono perche'.
+- Le cause dei difetti della strega volante (posa di caduta, camminata in aria, discesa lenta all'uscita) sono dedotte, non confermate
+  dal log: se restano, le righe del log che iniziano con "strega volante:" dicono lo stato reale.
+- Il blocco dell'input si aggancia al gestore dei comandi di movimento del gioco (stesse posizioni della tabella delle funzioni
+  che usano le mod di movimento direzionale; SE 1.5.97 e AE). Che basti a fermare la camminata e' una deduzione dal log della 2.3
+  (il movimento veniva ricavato dall'input prima dell'update, e la 2.3 lo rimetteva a posto subito dopo). La riga `movimento:` del
+  log dice se ha funzionato (velocityMod e Speed a 0 con lo stick vero diverso da 0); se la riga `finita:` dice "NON agganciato" il
+  blocco non c'e'.
+- Gli effetti solo visivi non riproducono la semitrasparenza del personaggio ne' lo scatto del dash di fuoco originale (quelli sono
+  script): il personaggio resta visibile e il movimento e' quello della mia mod.
+- Il comando di uscita predefinito del controller (LB + D-pad Sinistra) blocca il super salto con quella combinazione.
+- Le impostazioni della sezione di compatibilita' con la planata (`[Glide]` nell'ini) sono ripartite dai valori predefiniti.
+
+## Nomi tecnici che compaiono nel codice
+
+Alcuni nomi (il nome del file `doublejump.esp`, nomi di variabili ed eventi di animazione, nome del file dell'ini e del log)
+servono al gioco per riconoscere i file e **non indicano una release pubblica**: sono semplici identificatori tecnici di un
+progetto personale. Il file `src/SKSEMenuFramework.h` e' un'intestazione di terze parti, dei suoi autori.
+
+## Ancora una volta
+
+Questo repository e' **solo mio**, per **uso personale**: un **mashup di varie mod che mi piacciono**.
+**Non e' una release per tutti.** Grazie agli autori di tutte le mod da cui ho preso ispirazione: il merito delle idee,
+delle animazioni e degli effetti e' loro.
